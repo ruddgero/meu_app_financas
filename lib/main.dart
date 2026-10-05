@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:notification_listener_service/notification_event.dart';
 import 'package:notification_listener_service/notification_listener_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -9,123 +11,141 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Finanças Notificações',
+      title: 'Minhas Finanças',
       theme: ThemeData(
-        primarySwatch: Colors.green,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
       home: const DashboardScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
+// Classe que representa o Dinheiro
+class Transaction {
+  String id;
+  String title;
+  String description;
+  double amount;
+  bool isIncome;
+
+  Transaction({required this.id, required this.title, required this.description, required this.amount, required this.isIncome});
+
+  Map<String, dynamic> toMap() => {
+    'id': id, 'title': title, 'description': description, 'amount': amount, 'isIncome': isIncome
+  };
+
+  factory Transaction.fromMap(Map<String, dynamic> map) => Transaction(
+    id: map['id'], title: map['title'], description: map['description'], amount: map['amount'], isIncome: map['isIncome']
+  );
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
-
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
   StreamSubscription<ServiceNotificationEvent>? _subscription;
-  final List<ServiceNotificationEvent> _events = [];
+  List<Transaction> _transactions = [];
   bool _isGranted = false;
 
   @override
   void initState() {
     super.initState();
+    _loadTransactions();
     _checkPermission();
+  }
+
+  Future<void> _loadTransactions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? data = prefs.getString('transactions_v1');
+    if (data != null) {
+      final List decoded = jsonDecode(data);
+      setState(() {
+        _transactions = decoded.map((e) => Transaction.fromMap(e)).toList();
+      });
+    }
+  }
+
+  Future<void> _saveTransactions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String data = jsonEncode(_transactions.map((e) => e.toMap()).toList());
+    await prefs.setString('transactions_v1', data);
   }
 
   Future<void> _checkPermission() async {
     final bool res = await NotificationListenerService.isPermissionGranted();
-    setState(() {
-      _isGranted = res;
-    });
-    if (res) {
-      _startListening();
-    }
+    setState(() => _isGranted = res);
+    if (res) _startListening();
   }
 
   Future<void> _requestPermission() async {
     final bool res = await NotificationListenerService.requestPermission();
     if (res) {
-      setState(() {
-        _isGranted = true;
-      });
+      setState(() => _isGranted = true);
       _startListening();
     }
   }
 
   void _startListening() {
     _subscription = NotificationListenerService.notificationsStream.listen((event) {
-      if (event.content != null && (event.content!.toLowerCase().contains('r\$') || event.content!.toLowerCase().contains('pix'))) {
+      final text = '${event.title} ${event.content}'.toLowerCase();
+      
+      if (text.contains('compra') || text.contains('pagamento') || text.contains('pix') || text.contains('r\$') || text.contains('transferência') || text.contains('cartão')) {
+        
+        double amount = 0.0;
+        final regExp = RegExp(r'r\$\s?(\d+[\.,]\d+)');
+        final match = regExp.firstMatch(text);
+        if (match != null) {
+          String valStr = match.group(1)!.replaceAll('.', '').replaceAll(',', '.');
+          amount = double.tryParse(valStr) ?? 0.0;
+        }
+
+        bool isIncome = text.contains('recebid') || text.contains('transferência de') || text.contains('você recebeu');
+        
+        final newTx = Transaction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: event.title ?? 'Transação Capturada',
+          description: event.content ?? '',
+          amount: amount,
+          isIncome: isIncome,
+        );
+
         setState(() {
-          _events.insert(0, event);
+          _transactions.insert(0, newTx);
         });
+        _saveTransactions();
       }
     });
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
+  void _deleteTransaction(String id) {
+    setState(() {
+      _transactions.removeWhere((tx) => tx.id == id);
+    });
+    _saveTransactions();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Leitor de Pix e Compras', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.green.shade700,
-      ),
-      body: _isGranted ? _buildList() : _buildPermissionRequest(),
-    );
-  }
+  void _showEditDialog({Transaction? transaction}) {
+    final isNew = transaction == null;
+    TextEditingController titleCtrl = TextEditingController(text: isNew ? '' : transaction.title);
+    TextEditingController descCtrl = TextEditingController(text: isNew ? '' : transaction.description);
+    TextEditingController amountCtrl = TextEditingController(text: isNew ? '' : transaction.amount.toString());
+    bool isIncome = isNew ? false : transaction.isIncome;
 
-  Widget _buildPermissionRequest() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.notifications_active, size: 80, color: Colors.green),
-          const SizedBox(height: 20),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.0),
-            child: Text(
-              'Para capturar Pix e compras automaticamente, precisamos da permissão para ler notificações.',
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 30),
-          ElevatedButton(
-            onPressed: _requestPermission,
-            child: const Text('Conceder Permissão'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    if (_events.isEmpty) {
-      return const Center(child: Text('Nenhuma transação capturada ainda.\nFaça um Pix para testar!', textAlign: TextAlign.center,));
-    }
-    return ListView.builder(
-      itemCount: _events.length,
-      itemBuilder: (context, index) {
-        final event = _events[index];
-        return ListTile(
-          leading: const Icon(Icons.attach_money, color: Colors.green),
-          title: Text(event.title ?? 'Transação'),
-          subtitle: Text('${event.content ?? ''}'),
-        );
-      },
-    );
-  }
-}
+    showDialog(context: context, builder: (ctx) {
+      return StatefulBuilder(builder: (context, setDialogState) {
+        return AlertDialog(
+          title: Text(isNew ? 'Nova Transação manual' : 'Editar Transação'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título')),
+                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: '
