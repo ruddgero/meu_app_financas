@@ -32,13 +32,7 @@ class Transaction {
   double amount;
   bool isIncome;
 
-  Transaction({
-    required this.id, 
-    required this.title, 
-    required this.description, 
-    required this.amount, 
-    required this.isIncome
-  });
+  Transaction({required this.id, required this.title, required this.description, required this.amount, required this.isIncome});
 
   Map<String, dynamic> toMap() => {
     'id': id, 'title': title, 'description': description, 'amount': amount, 'isIncome': isIncome
@@ -103,7 +97,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final text = '${event.title} ${event.content}'.toLowerCase();
       
       if (text.contains('compra') || text.contains('pagamento') || text.contains('pix') || text.contains('r\$') || text.contains('transferência') || text.contains('cartão')) {
-        
         double amount = 0.0;
         final regExp = RegExp(r'r\$\s?(\d+[\.,]\d+)');
         final match = regExp.firstMatch(text);
@@ -116,7 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         
         final newTx = Transaction(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: event.title ?? 'Transação Capturada',
+          title: event.title ?? 'Transação',
           description: event.content ?? '',
           amount: amount,
           isIncome: isIncome,
@@ -136,7 +129,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     _saveTransactions();
   }
-
   void _showEditDialog({Transaction? transaction}) {
     final isNew = transaction == null;
     TextEditingController titleCtrl = TextEditingController(text: isNew ? '' : transaction.title);
@@ -231,4 +223,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     double totalIncome = _transactions.where((tx) => tx.isIncome).fold(0, (sum, tx) => sum + tx.amount);
     double totalExpense = _transactions.where((tx) => !tx.isIncome).fold(0, (sum, tx) => sum + tx.amount);
-    double balance = totalIncome - total
+    double
+
+  
