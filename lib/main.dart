@@ -25,13 +25,12 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Classe que representa cada transação (Dinheiro)
 class Transaction {
   String id;
   String title;
   String description;
   double amount;
-  bool isIncome; // Verdadeiro se for Receita (Pix recebido, etc), Falso se for Gasto (Compra, Pix pago)
+  bool isIncome;
 
   Transaction({
     required this.id, 
@@ -68,7 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _checkPermission();
   }
 
-  // Carrega os dados salvos na memória do celular
   Future<void> _loadTransactions() async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString('transactions_v1');
@@ -80,7 +78,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Salva os dados na memória do celular
   Future<void> _saveTransactions() async {
     final prefs = await SharedPreferences.getInstance();
     final String data = jsonEncode(_transactions.map((e) => e.toMap()).toList());
@@ -101,16 +98,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // O "Ouvido" do app: Lê as notificações e extrai valores
   void _startListening() {
     _subscription = NotificationListenerService.notificationsStream.listen((event) {
       final text = '${event.title} ${event.content}'.toLowerCase();
       
-      // Palavras-chave para identificar se é uma transação financeira
       if (text.contains('compra') || text.contains('pagamento') || text.contains('pix') || text.contains('r\$') || text.contains('transferência') || text.contains('cartão')) {
         
         double amount = 0.0;
-        // Pega o valor usando Expressão Regular (Regex) buscando por "R$" ou "R$ " seguido de números
         final regExp = RegExp(r'r\$\s?(\d+[\.,]\d+)');
         final match = regExp.firstMatch(text);
         if (match != null) {
@@ -118,7 +112,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           amount = double.tryParse(valStr) ?? 0.0;
         }
 
-        // Define se é dinheiro entrando ou saindo
         bool isIncome = text.contains('recebid') || text.contains('transferência de') || text.contains('você recebeu');
         
         final newTx = Transaction(
@@ -144,7 +137,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _saveTransactions();
   }
 
-  // Mostra a tela pop-up para Adicionar ou Editar uma transação manualmente
   void _showEditDialog({Transaction? transaction}) {
     final isNew = transaction == null;
     TextEditingController titleCtrl = TextEditingController(text: isNew ? '' : transaction.title);
@@ -161,10 +153,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Título')),
-                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descrição / Detalhes')),
+                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descrição')),
                 TextField(
                   controller: amountCtrl, 
-                  decoration: const InputDecoration(labelText: 'Valor (ex: 50.00)', prefixText: 'R\$ '),
+                  decoration: const InputDecoration(labelText: 'Valor', prefixText: 'R\$ '),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 16),
@@ -237,6 +229,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Calcula totais
     double totalIncome = _transactions.where((tx) => tx.isIncome).fold(0, (sum, tx) => sum + tx.amount);
-    double totalExpense = _transactions.where((tx) => !tx.isIncome).fold(0
+    double totalExpense = _transactions.where((tx) => !tx.isIncome).fold(0, (sum, tx) => sum + tx.amount);
+    double balance = totalIncome - total
